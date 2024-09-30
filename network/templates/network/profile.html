@@ -1,0 +1,209 @@
+{% extends "network/layout.html" %}
+
+{% block body %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        let value = document.querySelector('#followers').innerHTML;
+    })
+    // Getting the logic for editing
+    document.addEventListener("DOMContentLoaded", () => {
+        document.querySelectorAll('.list-group-item').forEach(div => {
+            const button = div.querySelector('#edit_button');
+            if (button) {
+                button.onclick = () => {
+                    div.querySelector('#edit_box').value = div.querySelector('#entry').innerHTML;
+                    div.querySelector('#edit_form').style.display = 'block';
+                    div.querySelector('#entry').style.display = 'none';
+                    div.querySelector('#cancel_button').style.display = 'block';
+                    div.querySelector('#cancel_button').onclick = () => {
+                        div.querySelector('#edit_form').style.display = 'none';
+                        div.querySelector('#entry').style.display = 'block';
+                        div.querySelector('#cancel_button').style.display = 'none';
+                    }
+                }
+
+                const postid = div.querySelector('#entry').dataset.id;
+                div.querySelector('#edit_form').onsubmit = (event) => {
+                    event.preventDefault();
+                    sendform(postid, div)
+                        .then(() => {
+                            return fetch(`/post/${postid}`);
+                        })
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error('Network response was not ok');
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            div.querySelector('#entry').innerHTML = data.content;
+                            console.log(data.content);
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                        })
+                        .finally(() => {
+                            div.querySelector('#edit_form').style.display = 'none';
+                            div.querySelector('#entry').style.display = 'block';
+                            div.querySelector('#cancel_button').style.display = 'none';
+                        });
+                }
+            }
+
+            function sendform(post_id, div) {
+                return fetch(`/edit/${post_id}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        id: post_id,
+                        new_input: div.querySelector('#edit_box').value
+                    })
+                })
+                    .then(response => {
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log(data);
+                    });
+            }
+
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+        });
+    });
+
+
+    // Logic for liking
+
+    document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll('#like_form').forEach(form => {
+        let postid = form.dataset.id;
+        updateLikeButton(form, postid);
+
+        form.onsubmit = (event) => {
+            event.preventDefault();
+
+            fetch(`like/${postid}`)
+                .then(response => response.json())
+                .then(result => {
+                    console.log(result);
+                    form.querySelector('#num_likes').innerHTML = result.likes;
+                    updateLikeButton(form, postid);
+                });
+        };
+    });
+});
+
+function updateLikeButton(form, postid) {
+    fetch(`liked/${postid}`)
+        .then(response => response.json())
+        .then(result => {
+            const button = form.querySelector('i')
+            if (result.message == 'false') {
+                button.classList.remove('fa-solid')
+                button.classList.add('fa-regular');
+                
+            } else {
+                button.classList.remove('fa-regular')
+                button.classList.add('fa-solid');
+                
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+}
+
+
+
+</script>
+
+<h1 style="font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: right;">{{userr}}</h1>
+<div style="text-align: center; display: flex; justify-content: center; gap: 20px;">
+    <div id="followers" style="font-family: helvetica;">
+        <div style="font-size: 20px; font-weight: 800;">FOLLOWERS</div>
+        <div style="font-size: 40px; font-weight: 900; font-family: sans-serif">{{followers.count}}</div>
+    </div>
+
+    <div id="following" style="font-family: helvetica">
+        <div style="font-size: 20px; font-weight: 800;">FOLLOWING</div>
+        <div style="font-size: 40px; font-weight: 900;">{{following.count}}</div>
+    </div>
+</div>
+<div style="text-align: center;">
+    {% if user.is_authenticated %}
+    {% if current_user == userr %}
+
+    {% else %}
+    {% if user_follows %}
+    <form action="{% url 'unfollow' userr.id %}">
+        <input class="btn btn-secondary" type="submit" value="Unfollow">
+    </form>
+    {% else %}
+    <form action="{% url 'follow' userr.id %}">
+        <input class="btn btn-primary" type="submit" value="Follow">
+    </form>
+    {% endif %}
+    {% endif %}
+    {% endif %}
+</div>
+
+{% for post in page_obj %}
+<div class="list-group-item" style="border-radius: 25px; margin:10px">
+    <h5><strong>
+        <div id="header"><a style="color: black" href="{% url 'profile' post.poster.id %}">{{ post.poster }}</a></div></strong>
+    </h5>
+    {% if post.poster == current_user %}
+        <button style="position: absolute; top:14px; right:10px; background: none; outline: none; border: none; color: blue;" id="edit_button">Edit Post</button>
+    {% endif %}
+    <div style="margin-bottom: 10px" data-id="{{post.id}}" id="entry">{{post.content}}</div>
+    <form data-id = "{{post_id}}" id="edit_form" action="{% url 'edit' post.id %}" class="form-group" style="display:none;">
+        <input class="form-control" style="width:500px" id="edit_box" type="text" name="entry" placeholder="">
+        <input type="submit" class="btn btn-primary" style="width:100px;" id="submit_value">
+    </form>
+    <button class="btn btn-danger" id="cancel_button" style="position: absolute; top: 82px; left: 120px;display:none; width:100px">Cancel</button>
+    {% if user.is_authenticated %}
+    <form data-id="{{post.id}}" id="like_form" class = "like_{{post.id}}"action="{% url 'like' post.id %}">
+        <button type="submit" style="border: none; background: none; outline: none; padding: 0; cursor: pointer; margin-left:3px">
+            <i class="fa-regular fa-heart" style="font-size: 24px; color: #ff4d3d;"></i>
+        </button>
+        <div id="num_likes" style="margin-left: 10px;">{{post.likes}}</div>
+    </form>
+    {% endif %}
+</div><br>
+
+{% endfor %}
+    <div class="pagination">
+        <span class="step-links">
+            {% if page_obj.has_previous %}
+            <a href="?page=1">&laquo; first</a>
+            <a href="?page={{ page_obj.previous_page_number }}">previous</a>
+            {% endif %}
+    
+            <span class="current">
+                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+            </span>
+    
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}">next</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}">last &raquo;</a>
+            {% endif %}
+        </span>
+    </div>
+
+{% endblock %}
